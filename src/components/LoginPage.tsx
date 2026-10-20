@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiService } from '../services/api';
 
 interface LoginPageProps {
   onLogin: (username: string) => void;
@@ -8,16 +9,20 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Простая проверка учётных данных
-    // В реальном приложении это должно быть на сервере
-    if (username === 'admin' && password === 'elizovo2024') {
-      onLogin(username);
-    } else {
-      setError('Неверный логин или пароль');
+    setError('');
+    setLoading(true);
+
+    try {
+      const data = await apiService.login(username, password);
+      onLogin(data.username);
+    } catch (err: any) {
+      setError(err.message || 'Ошибка авторизации');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -48,6 +53,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                 placeholder="Введите логин"
                 required
+                disabled={loading}
               />
             </div>
 
@@ -63,6 +69,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                 placeholder="Введите пароль"
                 required
+                disabled={loading}
               />
             </div>
 
@@ -74,9 +81,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 shadow-lg hover:shadow-xl"
+              disabled={loading}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Войти
+              {loading ? 'Вход...' : 'Войти'}
             </button>
           </form>
 

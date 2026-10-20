@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
-import { demoNews } from '../demoData';
+import React, { useState, useEffect, useMemo } from 'react';
+import { NewsItem, KEYWORDS } from '../types';
 import NewsCard from './NewsCard';
 import Sidebar from './Sidebar';
 import SourcesPage from './SourcesPage';
+import { apiService } from '../services/api';
 
 interface DashboardProps {
   username: string;
@@ -18,6 +19,40 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'source'>('date');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<any>({});
+
+  useEffect(() => {
+    loadNews();
+    loadStats();
+  }, [selectedSources, selectedKeywords, searchQuery, sortBy]);
+
+  const loadNews = async () => {
+    setLoading(true);
+    try {
+      const data = await apiService.getNews({
+        sources: selectedSources,
+        keywords: selectedKeywords,
+        search: searchQuery,
+        sortBy: sortBy === 'date' ? 'publishedAt' : 'source',
+      });
+      setNews(data.news);
+    } catch (error) {
+      console.error('Ошибка загрузки новостей:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const data = await apiService.getStats();
+      setStats(data);
+    } catch (error) {
+      console.error('Ошибка загрузки статистики:', error);
+    }
+  };
 
   const handleSourceToggle = (sourceId: string) => {
     setSelectedSources((prev) =>
@@ -36,68 +71,6 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
     setSelectedKeywords([]);
     setSearchQuery('');
   };
-
-  const filteredNews = useMemo(() => {
-    let news = [...demoNews];
-
-    // Filter by sources
-    if (selectedSources.length > 0) {
-      const sourceNames = selectedSources.map((id) => {
-        const sources: Record<string, string> = {
-          s1: 'KamchatInfo', s2: 'KAM24', s3: 'KamToday', s4: 'Камчатский Край',
-          s5: 'РИА Камчатка', s6: 'Полуостров Камчатка', s7: 'Елизово БезФормата',
-          s8: 'Lenta.ru Елизово', s9: 'КамИнформ - Елизово', s10: 'Госуслуги Елизово',
-          t1: 'ЧП Камчатка', t2: 'Без фильтра 41', t3: 'Массмедиа Кам', t4: 'Камчатка СМИ',
-          t5: 'New Елизово', t6: 'КамГов', t7: 'Камчатская жизнь', t8: 'КамРепортер',
-          m1: 'KAM24 (Max)', m2: 'Камчатка Now (Max)', m3: 'КамРепортер (Max)',
-          v1: 'Подслушано Елизово', v2: 'Елизово Group', v3: 'Разеб 41', v4: 'ИнфоКамч',
-          v5: 'КамГов 41', v6: 'КамчаТрип', v7: 'КамОтзовик',
-        };
-        return sources[id] || '';
-      });
-      news = news.filter((n) => sourceNames.includes(n.source));
-    }
-
-    // Filter by keywords
-    if (selectedKeywords.length > 0) {
-      news = news.filter((n) =>
-        selectedKeywords.some((kw) =>
-          n.keywords.some((nk) => nk.toLowerCase().includes(kw.toLowerCase())) ||
-          n.title.toLowerCase().includes(kw.toLowerCase()) ||
-          n.content.toLowerCase().includes(kw.toLowerCase())
-        )
-      );
-    }
-
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      news = news.filter(
-        (n) =>
-          n.title.toLowerCase().includes(query) ||
-          n.content.toLowerCase().includes(query) ||
-          n.source.toLowerCase().includes(query)
-      );
-    }
-
-    // Sort
-    if (sortBy === 'date') {
-      news.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
-    } else {
-      news.sort((a, b) => a.source.localeCompare(b.source));
-    }
-
-    return news;
-  }, [selectedSources, selectedKeywords, searchQuery, sortBy]);
-
-  // Stats
-  const stats = useMemo(() => {
-    const bySource = filteredNews.reduce((acc, n) => {
-      acc[n.sourceType] = (acc[n.sourceType] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    return bySource;
-  }, [filteredNews]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -149,7 +122,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
 
               <div className="hidden md:flex items-center gap-2 text-sm text-gray-600">
                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                <span>{filteredNews.length} новостей</span>
+                <span>{news.length} новостей</span>
               </div>
               <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
                 <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -220,28 +193,28 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
                     <span className="text-lg">🌐</span>
                     <span className="text-xs text-gray-500 uppercase font-medium">Сайты</span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-900">{stats.website || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.byType?.website || 0}</p>
                 </div>
                 <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-lg">✈️</span>
                     <span className="text-xs text-gray-500 uppercase font-medium">Telegram</span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-900">{stats.telegram || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.byType?.telegram || 0}</p>
                 </div>
                 <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-lg">💬</span>
                     <span className="text-xs text-gray-500 uppercase font-medium">VK</span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-900">{stats.vk || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.byType?.vk || 0}</p>
                 </div>
                 <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-lg">📱</span>
                     <span className="text-xs text-gray-500 uppercase font-medium">Max</span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-900">{stats.max || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.byType?.max || 0}</p>
                 </div>
               </div>
 
@@ -291,10 +264,15 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
               )}
 
               {/* News Grid */}
-              {filteredNews.length > 0 ? (
+              {loading ? (
+                <div className="text-center py-16">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-4 text-gray-600">Загрузка новостей...</p>
+                </div>
+              ) : news.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {filteredNews.map((news) => (
-                    <NewsCard key={news.id} news={news} />
+                  {news.map((item) => (
+                    <NewsCard key={item.id} news={item} />
                   ))}
                 </div>
               ) : (
@@ -314,24 +292,6 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
                   </button>
                 </div>
               )}
-
-              {/* Info Banner */}
-              <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-100">
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0">
-                    <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-blue-900 mb-1">Информация</h4>
-                    <p className="text-sm text-blue-700">
-                      Это демо-версия приложения с тестовыми данными. Для работы с реальными источниками потребуется серверная часть (бэкенд) для парсинга сайтов, подключения к API Telegram, VK и Max. 
-                      Данные обновляются каждые 30 минут в реальном приложении.
-                    </p>
-                  </div>
-                </div>
-              </div>
             </>
           ) : (
             <SourcesPage />
